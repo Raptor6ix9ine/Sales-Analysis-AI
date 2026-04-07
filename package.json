@@ -1,0 +1,15 @@
+{
+  "name": "workspace",
+  "version": "0.0.0",
+  "license": "MIT",
+  "scripts": {
+    "dev": "pnpm --filter @workspace/sales-ai run dev",
+    "build": "pnpm -r --if-present run build",
+    "typecheck": "tsc --noEmit"
+  },
+  "private": true,
+  "devDependencies": {
+    "typescript": "~5.9.2",
+    "prettier": "^3.8.1"
+  }
+}

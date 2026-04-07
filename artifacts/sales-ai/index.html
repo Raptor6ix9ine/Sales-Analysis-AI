@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales Analysis AI</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #020a1a;
+    --bg-mid: #04122e;
+    --bg-card: rgba(6, 28, 68, 0.6);
+    --border-glow: rgba(0, 170, 255, 0.2);
+    --cyan: #00aaff;
+    --teal: #00e5c8;
+    --blue: #3b8bff;
+    --purple: #6c5ce7;
+    --text-1: #e0f0ff;
+    --text-2: #6b8fbb;
+    --text-3: #3a5a80;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Rajdhani', sans-serif;
+    background: var(--bg-deep);
+    color: var(--text-1);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  .bg-layer {
+    position: fixed; inset:0; z-index:0;
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 10%, rgba(0,80,180,0.1) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 80% 80%, rgba(0,170,255,0.06) 0%, transparent 50%),
+      linear-gradient(180deg, #020a1a 0%, #04122e 40%, #061a38 100%);
+  }
+  .grid-overlay {
+    position: fixed; inset:0; z-index:1;
+    background-image:
+      linear-gradient(rgba(0,170,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,170,255,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    animation: gridPulse 8s ease-in-out infinite;
+  }
+  @keyframes gridPulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+  .particle {
+    position: fixed; width:2px; height:2px;
+    background: var(--cyan); border-radius:50%; z-index:1;
+    animation: floatP linear infinite;
+    box-shadow: 0 0 6px var(--cyan);
+  }
+  @keyframes floatP {
+    0%{transform:translateY(100vh);opacity:0}
+    10%{opacity:.8} 90%{opacity:.8}
+    100%{transform:translateY(-10vh);opacity:0}
+  }
+  .screen {
+    position: fixed; inset:0; z-index:10;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+    transition: opacity 0.6s ease, transform 0.6s ease;
+    pointer-events: none; opacity:0;
+    transform: scale(0.97);
+  }
+  .screen.active {
+    pointer-events: all; opacity:1; transform: scale(1);
+  }
+  .logo-mark {
+    width: 64px; height: 64px;
+    border: 2px solid var(--cyan);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    animation: logoSpin 12s linear infinite;
+    box-shadow: 0 0 30px rgba(0,170,255,0.2), inset 0 0 20px rgba(0,170,255,0.1);
+  }
+  .logo-mark::before {
+    content:''; position:absolute; inset:-6px;
+    border: 1px solid rgba(0,170,255,0.15);
+    border-radius: 50%;
+    animation: logoSpin 20s linear infinite reverse;
+  }
+  @keyframes logoSpin { to { transform: rotate(360deg); } }
+  .hero-title {
+    font-family: 'Orbitron', monospace;
+    font-weight: 800; font-size: clamp(1.8rem, 4vw, 3rem);
+    letter-spacing: 6px;
+    background: linear-gradient(135deg, var(--cyan), var(--teal));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 12px rgba(0,170,255,0.35));
+    margin-top: 28px;
+  }
+  .hero-sub {
+    color: var(--text-2); font-size: 1.15rem;
+    font-weight: 400; margin-top: 12px;
+    letter-spacing: 0.5px;
+  }
+  .upload-zone {
+    margin-top: 48px;
+    width: min(420px, 90vw); padding: 44px 32px;
+    border: 2px dashed rgba(0,170,255,0.25);
+    border-radius: 18px;
+    background: rgba(6,28,68,0.35);
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.4s ease;
+    position: relative; overflow: hidden;
+  }
+  .upload-zone::before {
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(circle at 50% 50%, rgba(0,170,255,0.06) 0%, transparent 70%);
+    opacity:0; transition: opacity 0.4s;
+  }
+  .upload-zone:hover { border-color: rgba(0,170,255,0.6); }
+  .upload-zone:hover::before { opacity:1; }
+  .upload-zone:hover { box-shadow: 0 0 40px rgba(0,170,255,0.1); }
+  .upload-icon {
+    font-size: 2rem; color: var(--cyan); margin-bottom: 14px;
+    filter: drop-shadow(0 0 8px rgba(0,170,255,0.4));
+  }
+  .upload-text { font-weight: 600; font-size: 1.1rem; color: var(--text-1); }
+  .upload-hint { font-size: 0.85rem; color: var(--text-3); margin-top: 6px; }
+  .sample-link {
+    margin-top: 20px; font-size: 0.9rem; color: var(--text-3);
+    cursor: pointer; transition: color 0.3s;
+    text-decoration: underline; text-underline-offset: 3px;
+  }
+  .sample-link:hover { color: var(--cyan); }
+  .loading-ring {
+    width: 80px; height: 80px; border-radius: 50%;
+    border: 3px solid rgba(0,170,255,0.1);
+    border-top-color: var(--cyan);
+    animation: loadSpin 1s linear infinite;
+    box-shadow: 0 0 30px rgba(0,170,255,0.15);
+  }
+  @keyframes loadSpin { to { transform: rotate(360deg); } }
+  .loading-step {
+    font-size: 1.1rem; color: var(--text-2);
+    margin-top: 32px; font-weight: 500;
+    transition: opacity 0.3s;
+    min-height: 28px;
+  }
+  .loading-step .dot {
+    display: inline-block;
+    animation: dotBlink 1.4s infinite;
+  }
+  .loading-step .dot:nth-child(2) { animation-delay: 0.2s; }
+  .loading-step .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes dotBlink { 0%,20%{opacity:0} 50%{opacity:1} 100%{opacity:0} }
+  .dash-wrapper {
+    width: 100%; min-height: 100vh;
+    padding: 12px 18px;
+    overflow-y: auto;
+    position: fixed; inset:0; z-index:10;
+    opacity:0; pointer-events:none;
+    transition: opacity 0.6s ease;
+  }
+  .dash-wrapper.active { opacity:1; pointer-events:all; }
+  .top-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-glow);
+    border-radius: 10px;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 0 40px rgba(0,170,255,0.08);
+    margin-bottom: 10px;
+  }
+  .top-logo {
+    font-family: 'Orbitron', monospace; font-weight: 700;
+    font-size: 0.85rem; letter-spacing: 3px;
+    background: linear-gradient(135deg, var(--cyan), var(--teal));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 14px; border-radius: 20px;
+    background: rgba(0,229,200,0.08);
+    border: 1px solid rgba(0,229,200,0.2);
+    font-size: 0.78rem; color: var(--teal); font-weight: 600;
+  }
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 8px var(--teal);
+    animation: blink 2s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px; margin-bottom: 10px;
+  }
+  .kpi-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-glow);
+    border-radius: 10px;
+    padding: 11px 15px;
+    backdrop-filter: blur(16px);
+    position: relative; overflow: hidden;
+    box-shadow: 0 0 20px rgba(0,170,255,0.05);
+    transition: all 0.3s ease;
+  }
+  .kpi-card:hover {
+    border-color: rgba(0,170,255,0.45);
+    transform: translateY(-2px);
+    box-shadow: 0 0 30px rgba(0,170,255,0.1);
+  }
+  .kpi-card::before, .kpi-card::after {
+    content:''; position:absolute; width:16px; height:16px;
+    border-color: var(--cyan); border-style: solid; opacity:.35;
+  }
+  .kpi-card::before { top:5px; left:5px; border-width:2px 0 0 2px; border-radius:3px 0 0 0; }
+  .kpi-card::after { bottom:5px; right:5px; border-width:0 2px 2px 0; border-radius:0 0 3px 0; }
+  .kpi-label { font-size: 0.66rem; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; }
+  .kpi-value {
+    font-family: 'Orbitron', monospace; font-weight: 800;
+    font-size: 1.3rem; margin-top: 4px;
+    color: var(--text-1);
+  }
+  .kpi-change { font-size: 0.72rem; font-weight: 600; margin-top: 3px; }
+  .kpi-up { color: var(--teal); }
+  .kpi-down { color: #ff6b6b; }
+  .chart-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 10px; margin-bottom: 10px;
+  }
+  .panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-glow);
+    border-radius: 12px;
+    padding: 14px;
+    backdrop-filter: blur(16px);
+    position: relative; overflow: hidden;
+    box-shadow: 0 0 20px rgba(0,170,255,0.05);
+  }
+  .panel::before, .panel::after {
+    content:''; position:absolute; width:16px; height:16px;
+    border-color: var(--cyan); border-style: solid; opacity:.35;
+  }
+  .panel::before { top:5px; left:5px; border-width:2px 0 0 2px; border-radius:3px 0 0 0; }
+  .panel::after { bottom:5px; right:5px; border-width:0 2px 2px 0; border-radius:0 0 3px 0; }
+  .panel-title {
+    font-family: 'Orbitron', monospace; font-weight: 600;
+    font-size: 0.63rem; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-2); margin-bottom: 10px;
+  }
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px; margin-bottom: 10px;
+  }
+  .insight-item {
+    padding: 8px 11px;
+    border-left: 3px solid var(--cyan);
+    background: rgba(0,170,255,0.04);
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 6px;
+    font-size: 0.82rem;
+    color: var(--text-1);
+    line-height: 1.4;
+    font-weight: 400;
+  }
+  .insight-item.warn { border-left-color: #ff6b6b; background: rgba(255,107,107,0.04); }
+  .insight-item.good { border-left-color: var(--teal); background: rgba(0,229,200,0.04); }
+  .rec-item {
+    padding: 8px 11px;
+    background: rgba(108,92,231,0.08);
+    border: 1px solid rgba(108,92,231,0.2);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 0.82rem;
+    color: var(--text-1);
+    line-height: 1.4;
+    display: flex; gap: 8px; align-items: flex-start;
+  }
+  .rec-icon {
+    color: var(--purple); font-size: 0.8rem; margin-top: 3px; flex-shrink:0;
+  }
+  .forecast-card {
+    padding: 9px 11px;
+    background: rgba(108,92,231,0.06);
+    border: 1px solid rgba(108,92,231,0.15);
+    border-radius: 8px;
+    margin-bottom: 0;
+  }
+  .forecast-label { font-size: 0.64rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+  .forecast-value {
+    font-family: 'Orbitron', monospace; font-weight: 700;
+    font-size: 1.05rem; color: var(--text-1); margin-top: 2px;
+  }
+  .forecast-note { font-size: 0.74rem; color: var(--text-2); margin-top: 2px; }
+  .anomaly-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 8px;
+    background: rgba(255,107,107,0.08);
+    border: 1px solid rgba(255,107,107,0.2);
+    font-size: 0.8rem; color: #ff6b6b; font-weight: 600;
+    margin-top: 6px;
+  }
+  .error-box {
+    background: var(--bg-card);
+    border: 1px solid rgba(255,107,107,0.2);
+    border-radius: 18px;
+    padding: 48px 40px;
+    text-align: center;
+    max-width: 480px;
+    backdrop-filter: blur(16px);
+  }
+  .error-icon { font-size: 2.5rem; color: #ff6b6b; margin-bottom: 20px; }
+  .error-title { font-family:'Orbitron',monospace; font-weight:700; font-size:1.1rem; letter-spacing:2px; margin-bottom:12px; }
+  .error-desc { color: var(--text-2); font-size:0.95rem; line-height:1.6; margin-bottom:24px; }
+  .error-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 28px; border-radius: 12px;
+    background: rgba(0,170,255,0.12);
+    border: 1px solid rgba(0,170,255,0.3);
+    color: var(--cyan); font-weight: 600;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.95rem; cursor: pointer;
+    transition: all 0.3s;
+  }
+  .error-btn:hover { background: rgba(0,170,255,0.2); box-shadow: 0 0 20px rgba(0,170,255,0.15); }
+  @media (max-width: 1024px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .chart-grid { grid-template-columns: 1fr; }
+    .bottom-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .kpi-grid { grid-template-columns: 1fr; }
+    .dash-wrapper { padding: 12px; }
+    .kpi-value { font-size: 1.4rem; }
+  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,170,255,0.2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,170,255,0.4); }
+  /* ── Chat panel ──────────────────────────────────────────────────────── */
+  .chat-messages {
+    flex: 1; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 8px;
+    padding-right: 2px;
+    min-height: 0;
+  }
+  .chat-bubble {
+    padding: 9px 13px;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    max-width: 90%;
+    word-break: break-word;
+  }
+  .chat-bubble.ai {
+    background: rgba(0,170,255,0.08);
+    border: 1px solid rgba(0,170,255,0.18);
+    color: var(--text-1);
+    align-self: flex-start;
+    border-radius: 4px 10px 10px 10px;
+  }
+  .chat-bubble.user {
+    background: rgba(0,170,255,0.15);
+    border: 1px solid rgba(0,170,255,0.3);
+    color: var(--text-1);
+    align-self: flex-end;
+    border-radius: 10px 4px 10px 10px;
+    font-weight: 500;
+  }
+  .chat-bubble strong { color: var(--cyan); }
+  .chat-input-row {
+    display: flex; gap: 8px; align-items: center;
+    margin-top: 10px; flex-shrink: 0;
+  }
+  .chat-input {
+    flex: 1; background: rgba(0,10,30,0.5);
+    border: 1px solid rgba(0,170,255,0.2);
+    border-radius: 8px; padding: 8px 12px;
+    color: var(--text-1); font-family: 'Rajdhani', sans-serif;
+    font-size: 0.85rem; outline: none;
+    transition: border-color 0.3s;
+  }
+  .chat-input::placeholder { color: var(--text-3); }
+  .chat-input:focus { border-color: rgba(0,170,255,0.5); }
+  .chat-send-btn {
+    width: 36px; height: 36px; flex-shrink: 0;
+    background: var(--cyan);
+    border: none; border-radius: 8px;
+    color: #020a1a; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem;
+    transition: all 0.25s;
+    box-shadow: 0 0 12px rgba(0,170,255,0.3);
+  }
+  .chat-send-btn:hover { background: var(--teal); box-shadow: 0 0 20px rgba(0,229,200,0.4); }
+  .chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .chat-typing {
+    display: flex; gap: 4px; align-items: center;
+    padding: 8px 12px;
+    background: rgba(0,170,255,0.06);
+    border: 1px solid rgba(0,170,255,0.15);
+    border-radius: 4px 10px 10px 10px;
+    align-self: flex-start;
+  }
+  .chat-typing span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--cyan); opacity: 0.4;
+    animation: typingDot 1.2s ease-in-out infinite;
+  }
+  .chat-typing span:nth-child(2) { animation-delay: 0.2s; }
+  .chat-typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typingDot { 0%,60%,100%{opacity:0.2} 30%{opacity:1} }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-layer"></div>
+<div class="grid-overlay"></div>
+<div id="particles"></div>
+
+<!-- SCREEN 1: LANDING -->
+<div class="screen active" id="screen-landing">
+  <div class="logo-mark">
+    <img src="/logo.png" alt="Logo" style="width:38px; height:38px; object-fit:contain; display:block; filter: hue-rotate(-25deg) saturate(2) brightness(1.5) drop-shadow(0 0 8px rgba(0,170,255,0.7));">
+  </div>
+  <div class="hero-title">SALES ANALYSIS AI</div>
+  <div class="hero-sub">Turn your sales data into clear business decisions in seconds.</div>
+  <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Upload CSV file">
+    <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+    <div class="upload-text">Upload CSV</div>
+    <div class="upload-hint">Drag & drop or click — supports .csv files</div>
+  </div>
+  <a href="/sample.csv" download="sample_sales.csv" class="sample-link" style="text-decoration:none;">Download Sample CSV</a>
+  <input type="file" id="fileInput" accept=".csv" style="display:none">
+</div>
+
+<!-- SCREEN 2: LOADING -->
+<div class="screen" id="screen-loading">
+  <div class="loading-ring"></div>
+  <div class="loading-step" id="loadingText">Analyzing your sales data<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
+</div>
+
+<!-- SCREEN 3: DASHBOARD -->
+<div class="dash-wrapper" id="screen-dashboard">
+  <div class="top-bar">
+    <div class="top-logo">SALES ANALYSIS AI</div>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <div class="status-pill"><div class="status-dot"></div> Analysis Complete</div>
+      <button onclick="goScreen('landing')" style="padding:6px 16px; border-radius:8px; background:rgba(0,170,255,0.08); border:1px solid rgba(0,170,255,0.2); color:var(--text-2); font-family:'Rajdhani'; font-size:0.82rem; cursor:pointer; transition:all 0.3s;" onmouseover="this.style.borderColor='rgba(0,170,255,0.5)'" onmouseout="this.style.borderColor='rgba(0,170,255,0.2)'"><i class="fa-solid fa-arrow-rotate-left" style="margin-right:6px;"></i>New Upload</button>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Total Revenue</div>
+      <div class="kpi-value" id="kpiRevenue">—</div>
+      <div class="kpi-change kpi-up">From your CSV data</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Orders</div>
+      <div class="kpi-value" id="kpiOrders">—</div>
+      <div class="kpi-change kpi-up">Valid rows analyzed</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Growth Rate</div>
+      <div class="kpi-value" id="kpiGrowth" style="color:var(--teal);">—</div>
+      <div class="kpi-change kpi-up" id="kpiGrowthChange">Calculating...</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Avg Order Value</div>
+      <div class="kpi-value" id="kpiAOV">—</div>
+      <div class="kpi-change">Per transaction</div>
+    </div>
+  </div>
+
+  <!-- Row 2: Line chart + Doughnut + Forecast (3 cols) -->
+  <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:10px; margin-bottom:10px;">
+    <div class="panel">
+      <div class="panel-title"><i class="fa-solid fa-chart-line" style="margin-right:6px; color:var(--cyan);"></i>Sales Over Time</div>
+      <div style="position:relative; height:200px;"><canvas id="lineChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><i class="fa-solid fa-chart-pie" style="margin-right:6px; color:var(--teal);"></i>Revenue by Product</div>
+      <div style="position:relative; height:200px;"><canvas id="doughnutChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><i class="fa-solid fa-wand-magic-sparkles" style="margin-right:6px; color:var(--purple);"></i>Forecast</div>
+      <div style="display:flex; flex-direction:column; gap:7px;">
+        <div class="forecast-card" style="margin-bottom:0;">
+          <div class="forecast-label">Next Week</div>
+          <div class="forecast-value" id="forecastWeek" style="color:var(--teal); font-size:1.05rem;">—</div>
+          <div class="forecast-note" id="growthTrend">Calculating...</div>
+        </div>
+        <div class="forecast-card" style="margin-bottom:0;">
+          <div class="forecast-label">Next Month</div>
+          <div class="forecast-value" id="forecastMonth" style="font-size:1.05rem;">—</div>
+          <div class="forecast-note">Projected estimate</div>
+        </div>
+        <div class="anomaly-tag" id="anomalyTag" style="font-size:0.75rem; padding:5px 9px; display:none;"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 3: Bar + Insights + Recs + Chat (4 cols) -->
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:10px; margin-bottom:12px;">
+    <div class="panel">
+      <div class="panel-title"><i class="fa-solid fa-globe" style="margin-right:6px; color:var(--blue);"></i>By Region</div>
+      <div style="position:relative; height:200px;"><canvas id="barChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><i class="fa-solid fa-brain" style="margin-right:6px; color:var(--cyan);"></i>Insights</div>
+      <div id="insightsList"><div class="insight-item good" style="opacity:0.5;">Upload a CSV to see insights.</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><i class="fa-solid fa-lightbulb" style="margin-right:6px; color:var(--purple);"></i>Recommendations</div>
+      <div id="recsList"><div class="rec-item" style="opacity:0.5;"><div class="rec-icon"><i class="fa-solid fa-bullseye"></i></div><div>Upload a CSV to see recommendations.</div></div></div>
+    </div>
+    <!-- ASK ANYTHING chat panel -->
+    <div class="panel" style="display:flex; flex-direction:column; min-height:240px;">
+      <div class="panel-title"><i class="fa-solid fa-message" style="margin-right:6px; color:var(--teal);"></i>Ask Anything</div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-bubble ai" id="chatIntro">Upload a CSV to start chatting about your data.</div>
+      </div>
+      <div class="chat-input-row">
+        <input class="chat-input" id="chatInput" type="text" placeholder="Ask about your data..." autocomplete="off" disabled />
+        <button class="chat-send-btn" id="chatSendBtn" onclick="handleChatSend()" disabled aria-label="Send message">
+          <i class="fa-solid fa-paper-plane"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 4: ERROR -->
+<div class="screen" id="screen-error">
+  <div class="error-box">
+    <div class="error-icon"><i class="fa-solid fa-file-circle-xmark"></i></div>
+    <div class="error-title">ANALYSIS FAILED</div>
+    <div class="error-desc" id="errorMessage">
+      This doesn't look like a valid sales CSV. We need columns:<br>
+      <strong style="color:var(--text-1);">date, product, revenue, quantity, region</strong><br><br>
+      Download the sample file to see the correct format.
+    </div>
+    <a href="/sample.csv" download="sample_sales.csv" class="error-btn" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none;"><i class="fa-solid fa-download"></i> Download Sample CSV</a>
+    <div style="margin-top:14px;">
+      <span class="sample-link" onclick="goScreen('landing')" style="cursor:pointer;">← Try uploading again</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const container = document.getElementById('particles');
+  for (let i = 0; i < 15; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = Math.random() * 100 + '%';
+    p.style.animationDuration = (8 + Math.random() * 12) + 's';
+    p.style.animationDelay = (Math.random() * 10) + 's';
+    p.style.opacity = 0.3 + Math.random() * 0.5;
+    p.style.width = p.style.height = (1 + Math.random() * 2) + 'px';
+    container.appendChild(p);
+  }
+})();
+
+// ── State ────────────────────────────────────────────────────────────────────
+let analysisResult = null;
+let chartInstances = {};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtCurrency(n) {
+  if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return '$' + (n / 1_000).toFixed(1) + 'K';
+  return '$' + n.toFixed(0);
+}
+
+// ── Screen navigation ─────────────────────────────────────────────────────────
+function goScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-dashboard').classList.remove('active');
+  const target = document.getElementById('screen-' + name);
+  if (target) target.classList.add('active');
+}
+
+// ── Upload handling ────────────────────────────────────────────────────────────
+document.getElementById('uploadZone').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('uploadZone').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') document.getElementById('fileInput').click();
+});
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  if (e.target.files.length > 0) uploadAndAnalyze(e.target.files[0]);
+});
+
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  zone.style.borderColor = 'rgba(0,170,255,0.7)';
+  zone.style.background = 'rgba(0,170,255,0.08)';
+});
+zone.addEventListener('dragleave', () => {
+  zone.style.borderColor = 'rgba(0,170,255,0.25)';
+  zone.style.background = 'rgba(6,28,68,0.35)';
+});
+zone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  zone.style.borderColor = 'rgba(0,170,255,0.25)';
+  zone.style.background = 'rgba(6,28,68,0.35)';
+  const file = e.dataTransfer.files[0];
+  if (file) uploadAndAnalyze(file);
+});
+
+// ── Main upload + analysis pipeline ───────────────────────────────────────────
+async function uploadAndAnalyze(file) {
+  if (!file.name.toLowerCase().endsWith('.csv')) {
+    showError('Invalid file type. Please upload a .csv file.', 'Required columns: date, product, revenue, quantity, region');
+    return;
+  }
+
+  goScreen('loading');
+  runLoadingSteps();
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch('/api/analyze', { method: 'POST', body: formData });
+    const json = await res.json();
+
+    if (!res.ok || !json.success) {
+      showError(json.error || 'Analysis failed.', json.hint || '');
+      return;
+    }
+
+    analysisResult = json.data;
+    populateDashboard(json.data);
+    goScreen('dashboard');
+    renderCharts(json.data.charts);
+    initChat(json.data);
+
+  } catch (err) {
+    showError('Could not connect to the analysis server. Please try again.', '');
+  }
+}
+
+function runLoadingSteps() {
+  const el = document.getElementById('loadingText');
+  const steps = [
+    'Validating your data',
+    'Cleaning & processing rows',
+    'Detecting trends & anomalies',
+    'Generating insights & recommendations',
+  ];
+  let i = 0;
+  const iv = setInterval(() => {
+    i++;
+    if (i < steps.length) {
+      el.innerHTML = steps[i] + '<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>';
+    } else {
+      clearInterval(iv);
+    }
+  }, 900);
+}
+
+function showError(msg, hint) {
+  const el = document.getElementById('errorMessage');
+  if (el) el.innerHTML = msg + (hint ? '<br><small style="color:var(--text-3);font-size:0.8rem;margin-top:6px;display:block;">' + hint + '</small>' : '');
+  goScreen('error');
+}
+
+// ── Populate dashboard with real data ─────────────────────────────────────────
+function populateDashboard(d) {
+  const k = d.kpis;
+
+  // KPIs
+  setText('kpiRevenue', fmtCurrency(k.totalRevenue));
+  setText('kpiOrders', k.totalOrders.toLocaleString());
+  setText('kpiGrowth', (k.growthRate >= 0 ? '+' : '') + k.growthRate.toFixed(1) + '%');
+  setText('kpiAOV', fmtCurrency(k.avgOrderValue));
+
+  const growthEl = document.getElementById('kpiGrowth');
+  if (growthEl) growthEl.style.color = k.growthRate >= 0 ? 'var(--teal)' : '#ff6b6b';
+
+  setText('kpiGrowthChange', k.growthRate >= 0 ? '↑ Positive trajectory' : '↓ Declining trend');
+  const changeEl = document.getElementById('kpiGrowthChange');
+  if (changeEl) changeEl.className = 'kpi-change ' + (k.growthRate >= 0 ? 'kpi-up' : 'kpi-down');
+
+  // Forecast
+  setText('forecastWeek', fmtCurrency(d.forecast.nextWeek));
+  setText('forecastMonth', fmtCurrency(d.forecast.nextMonth));
+  const anomalyEl = document.getElementById('anomalyTag');
+  if (anomalyEl) {
+    if (d.forecast.anomaly) {
+      anomalyEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + d.forecast.anomaly;
+      anomalyEl.style.display = '';
+    } else {
+      anomalyEl.style.display = 'none';
+    }
+  }
+  setText('growthTrend', d.forecast.growthTrend);
+
+  // Insights
+  const insightsEl = document.getElementById('insightsList');
+  if (insightsEl) {
+    insightsEl.innerHTML = d.insights.map(i =>
+      `<div class="insight-item ${i.type === 'warn' ? 'warn' : i.type === 'good' ? 'good' : ''}">${i.text}</div>`
+    ).join('');
+  }
+
+  // Recommendations
+  const recsEl = document.getElementById('recsList');
+  if (recsEl) {
+    recsEl.innerHTML = d.recommendations.map(r =>
+      `<div class="rec-item"><div class="rec-icon"><i class="fa-solid fa-${r.icon}"></i></div><div>${r.text}</div></div>`
+    ).join('');
+  }
+}
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+// ── Chart rendering ────────────────────────────────────────────────────────────
+const CHART_COLORS = ['#00aaff','#00e5c8','#6c5ce7','#3b8bff','#ff9f30','#ff6b6b'];
+
+function renderCharts(charts) {
+  Chart.defaults.color = '#6b8fbb';
+  Chart.defaults.borderColor = 'rgba(0,170,255,0.1)';
+  Chart.defaults.font.family = 'Rajdhani';
+
+  destroyChart('lineChart');
+  destroyChart('doughnutChart');
+  destroyChart('barChart');
+
+  chartInstances.line = new Chart(document.getElementById('lineChart'), {
+    type: 'line',
+    data: {
+      labels: charts.salesOverTime.labels,
+      datasets: [{
+        label: 'Revenue',
+        data: charts.salesOverTime.data,
+        borderColor: '#00aaff',
+        backgroundColor: 'rgba(0,170,255,0.08)',
+        borderWidth: 2.5, fill: true, tension: 0.4,
+        pointRadius: 3, pointBackgroundColor: '#00aaff',
+        pointBorderColor: '#020a1a', pointBorderWidth: 2, pointHoverRadius: 6
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(0,170,255,0.05)' }, ticks: { font: { size: 10 }, maxTicksLimit: 8 } },
+        y: { grid: { color: 'rgba(0,170,255,0.05)' }, ticks: { font: { size: 10 }, callback: v => fmtCurrency(v) } }
+      }
+    }
+  });
+
+  chartInstances.doughnut = new Chart(document.getElementById('doughnutChart'), {
+    type: 'doughnut',
+    data: {
+      labels: charts.revenueByProduct.labels,
+      datasets: [{
+        data: charts.revenueByProduct.data,
+        backgroundColor: CHART_COLORS,
+        borderColor: '#04122e', borderWidth: 3, hoverOffset: 8
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '65%',
+      plugins: { legend: { position: 'bottom', labels: { padding: 10, usePointStyle: true, pointStyleWidth: 8, font: { size: 11 } } } }
+    }
+  });
+
+  chartInstances.bar = new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels: charts.revenueByRegion.labels,
+      datasets: [{
+        label: 'Revenue',
+        data: charts.revenueByRegion.data,
+        backgroundColor: CHART_COLORS.map(c => c + '99'),
+        borderColor: CHART_COLORS,
+        borderWidth: 1.5, borderRadius: 6, barPercentage: 0.6
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+        y: { grid: { color: 'rgba(0,170,255,0.05)' }, ticks: { font: { size: 10 }, callback: v => fmtCurrency(v) } }
+      }
+    }
+  });
+}
+
+function destroyChart(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const existing = Chart.getChart(el);
+  if (existing) existing.destroy();
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+function initChat(data) {
+  const k = data.kpis;
+  const orders = k.totalOrders.toLocaleString();
+  const revenue = fmtCurrency(k.totalRevenue);
+  const product = k.topProduct || 'N/A';
+  const intro = document.getElementById('chatIntro');
+  if (intro) {
+    intro.innerHTML = `I've analyzed <strong>${orders}</strong> orders totalling <strong>${revenue}</strong>. Your top product is <strong>"${product}"</strong>. Ask me anything about your data.`;
+  }
+  const input = document.getElementById('chatInput');
+  const btn = document.getElementById('chatSendBtn');
+  if (input) { input.disabled = false; input.addEventListener('keydown', e => { if (e.key === 'Enter') handleChatSend(); }); }
+  if (btn) btn.disabled = false;
+}
+
+function appendBubble(role, text) {
+  const box = document.getElementById('chatMessages');
+  if (!box) return;
+  const div = document.createElement('div');
+  div.className = 'chat-bubble ' + role;
+  div.innerHTML = text;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  return div;
+}
+
+function showTyping() {
+  const box = document.getElementById('chatMessages');
+  if (!box) return null;
+  const div = document.createElement('div');
+  div.className = 'chat-typing';
+  div.innerHTML = '<span></span><span></span><span></span>';
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  return div;
+}
+
+async function handleChatSend() {
+  const input = document.getElementById('chatInput');
+  const btn = document.getElementById('chatSendBtn');
+  if (!input || !analysisResult) return;
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  input.disabled = true;
+  btn.disabled = true;
+
+  appendBubble('user', msg);
+  const typing = showTyping();
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, context: analysisResult })
+    });
+    const json = await res.json();
+    if (typing) typing.remove();
+    if (json.reply) {
+      appendBubble('ai', json.reply);
+    } else {
+      appendBubble('ai', json.error || 'Something went wrong.');
+    }
+  } catch (err) {
+    if (typing) typing.remove();
+    appendBubble('ai', 'Could not reach the server. Please try again.');
+  } finally {
+    input.disabled = false;
+    btn.disabled = false;
+    input.focus();
+  }
+}
+</script>
+</body>
+</html>
