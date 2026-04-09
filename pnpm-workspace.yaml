@@ -1,6 +1,5 @@
 packages:
   - artifacts/sales-ai
-  - artifacts/mockup-sandbox
 
 catalog:
   '@types/node': ^25.3.3

@@ -208,15 +208,18 @@ Forecast:
 
 Answer the user's question using only this data. Be specific, cite numbers, and keep responses under 3 sentences."""
 
-        api_key = os.getenv('OPENAI_API_KEY')
+        api_key = os.getenv('GROQ_API_KEY')
         if not api_key:
-            return jsonify({"error": "OpenAI API key not configured."}), 500
+            return jsonify({"error": "Groq API key not configured."}), 500
 
         from openai import OpenAI
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.groq.com/openai/v1",
+        )
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": message}
