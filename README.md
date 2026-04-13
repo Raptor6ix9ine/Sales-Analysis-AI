@@ -1,309 +1,107 @@
-# Sales Analysis AI - Project Documentation
+# Sales Analysis AI
 
-## 📋 Quick Start
+> Turn your sales data into clear business decisions in seconds.
 
-### Backend (Python Flask)
-```bash
-cd artifacts/api-server-python
-pip install -r requirements.txt
-python src/index.py
-```
-Server runs on `http://localhost:3001`
+A cyberpunk-themed sales analytics dashboard that accepts CSV uploads, performs comprehensive analysis (KPIs, charts, insights, recommendations, forecasting), and includes an AI-powered Q&A chat.
 
-### Frontend (React + Vite)
-```bash
-cd artifacts/sales-ai
-npm install
-npm run dev
-```
-Frontend runs on `http://localhost:5173`
-
----
-
-## 🏗️ Project Structure
+## Architecture
 
 ```
 Sales-Analysis-AI/
 ├── artifacts/
-│   ├── api-server-python/       # Python/Flask backend
-│   │   ├── src/
-│   │   │   ├── app.py           # Flask app factory
-│   │   │   ├── routes.py        # API endpoints
-│   │   │   ├── analyzer.py      # Analysis engine (optimized)
-│   │   │   ├── logger.py        # Logging setup
-│   │   │   ├── index.py         # Entry point (dev)
-│   │   ├── wsgi.py              # Production entry point
-│   │   ├── requirements.txt     # Dependencies
-│   │   └── README.md
+│   ├── sales-ai/               # Frontend (Vanilla HTML + Chart.js)
+│   │   ├── index.html          # Complete dashboard UI
+│   │   ├── public/             # Static assets (logo, sample CSV)
+│   │   ├── vite.config.ts      # Dev server + API proxy
+│   │   └── package.json
 │   │
-│   ├── sales-ai/                # React frontend
-│   │   ├── src/
-│   │   │   ├── App.tsx
-│   │   │   ├── pages/
-│   │   │   ├── components/      # shadcn/ui components
-│   │   │   ├── hooks/
-│   │   ├── vite.config.ts       # Vite + API proxy
-│   │   ├── package.json
-│   │   └── index.html
-│   │
-│   └── mockup-sandbox/          # UI component sandbox
+│   └── api-server-python/      # Backend (Python / Flask)
+│       ├── src/
+│       │   ├── app.py          # Flask application factory
+│       │   ├── routes.py       # API route handlers
+│       │   ├── analyzer.py     # Sales analysis engine
+│       │   └── logger.py       # Logging configuration
+│       ├── wsgi.py             # Production entry point
+│       ├── requirements.txt
+│       └── .env.example
 │
-├── package.json                 # Workspace root config
-├── pnpm-workspace.yaml          # Simplified workspace
-├── tsconfig.json
-├── MIGRATION_GUIDE.md
-└── README.md
+├── pnpm-workspace.yaml
+└── package.json
 ```
 
----
+## Quick Start
 
-## 🚀 Features
+### 1. Backend
 
-### Backend
-✅ CSV upload & validation  
-✅ Real-time data analysis  
-✅ KPI calculation  
-✅ Chart data generation  
-✅ Anomaly detection  
-✅ Revenue forecasting  
-✅ Automated insights & recommendations  
-✅ CORS enabled  
-✅ Production-ready (Gunicorn support)  
-
-### Frontend
-✅ File upload interface  
-✅ Real-time dashboard  
-✅ Interactive charts (Recharts)  
-✅ API integration  
-✅ Responsive design  
-
----
-
-## 📊 API Endpoints
-
-### Health Check
-```
-GET /api/healthz
-Response: { "status": "ok" }
-```
-
-### Analyze CSV
-```
-POST /api/analyze
-Content-Type: multipart/form-data
-
-file: <CSV file>
-
-Response: {
-  "success": true,
-  "data": {
-    "kpis": { ... },
-    "charts": { ... },
-    "insights": [ ... ],
-    "recommendations": [ ... ],
-    "forecast": { ... },
-    "summary": "..."
-  },
-  "warnings": [ ... ],
-  "rowCount": number
-}
-```
-
----
-
-## 📈 Performance Optimizations
-
-### Backend (Python)
-- **Time Complexity**: O(n log n) due to sorting
-- **Space Complexity**: O(n) for data storage
-- **Optimizations**:
-  - Early parsing validation
-  - Single-pass data grouping
-  - Constant-time forecasting
-  - Efficient helper functions
-  - Type hints for better performance
-
-### Frontend (React)
-- **Tree-shaking enabled**: Only used code bundled
-- **Code splitting**: Vite automatic chunk splitting
-- **Lazy loading**: React.lazy for pages
-- **API caching**: React Query with 5min stale time
-- **Optimize dependencies**: Removed unused libraries
-
-### Project-wide
-- **Removed unused packages**: db, api-zod, integrations, etc.
-- **Consolidated workspace**: Only active packages
-- **Removed artifacts**: Old mockups, Replit files
-- **Cleaned config**: Removed unnecessary npm config
-
----
-
-## 🔧 Development
-
-### Python Backend Development
 ```bash
-# Install dependencies
+cd artifacts/api-server-python
 pip install -r requirements.txt
-
-# Run dev server (auto-reload)
-python src/index.py
-
-# Production deployment
-gunicorn -w 4 -b 0.0.0.0:3001 wsgi:app
+python src/app.py
+# → Server starts on http://localhost:3001
 ```
 
-### React Frontend Development
-```bash
-# Install dependencies  
-npm install
-
-# Development server (hot reload)
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview build
-npm run preview
-```
-
----
-
-## 📝 CSV Format
-
-**Required columns** (case-insensitive):
-- `date` - Date in YYYY-MM-DD format
-- `product` - Product name
-- `revenue` - Revenue amount (numbers only)
-- `quantity` - Order quantity
-- `region` - Geographic region
-
-**Example**:
-```csv
-date,product,revenue,quantity,region
-2024-01-03,ProMax Suite,1820,12,North
-2024-01-05,Starter Plan,640,8,South
-2024-01-07,Enterprise,3200,4,East
-```
-
-**Requirements**:
-- Minimum 5 rows
-- Valid dates
-- Numeric revenue/quantity
-
----
-
-## 🔐 Environment Variables
+### 2. Frontend
 
 ```bash
-# Backend
-PORT=3001                    # Server port
-NODE_ENV=development         # development or production
-LOG_LEVEL=INFO              # DEBUG, INFO, WARNING, ERROR
-
-# Frontend
-VITE_API_URL=http://localhost:3001
+# From project root
+pnpm install
+pnpm dev
+# → Vite dev server on http://localhost:5173 (proxies /api to :3001)
 ```
 
----
+### 3. Upload & Analyze
 
-## 📦 Dependencies
+Open `http://localhost:5173`, upload a CSV with these columns:
 
-### Backend
-- Flask 3.0.0
-- Flask-CORS 4.0.0
-- python-multipart 0.0.6
-- python-dateutil 2.8.2
-- gunicorn 21.2.0 (production)
+| date | product | revenue | quantity | region |
+|------|---------|---------|----------|--------|
+| 2024-01-15 | Widget A | 1500.00 | 25 | North |
 
-### Frontend
-- React 18.2.0
-- Vite 7.3.0
-- Recharts 2.10.3
-- React Query 5.28.0
-- TailwindCSS 3.3.6
-- shadcn/ui components
+Or download the sample CSV from the landing page.
 
----
+## Features
 
-## 🧪 Testing CSV Upload
+- **KPI Dashboard** — Total revenue, orders, growth rate, average order value
+- **Interactive Charts** — Sales over time, revenue by product (doughnut), revenue by region (bar)
+- **AI Insights** — Automated trend detection, anomaly alerts, underperformance warnings
+- **Recommendations** — Actionable business suggestions based on data patterns
+- **Forecasting** — Next-week and next-month revenue projections
+- **AI Chat** — Ask natural-language questions about your data (powered by Groq/Llama 3.3)
 
-1. **Using sample data**:
-   ```
-   Download from http://localhost:3001/sample.csv
-   ```
+## AI Chat Setup (Optional)
 
-2. **Create your own**:
-   - Use the CSV format above
-   - Minimum 5 rows
-   - Valid data
+The chat feature uses the Groq API (free tier available):
 
-3. **Via API**:
-   ```bash
-   curl -X POST http://localhost:3001/api/analyze \
-     -F "file=@data.csv"
-   ```
-
----
-
-## 🚨 Troubleshooting
-
-### Backend won't start
-- Check Python 3.8+ is installed
-- Verify port 3001 is available
-- Check `requirements.txt` is installed
-
-### Frontend can't reach API
-- Verify backend is running on port 3001
-- Check browser console for CORS errors
-- Verify API proxy in `vite.config.ts`
-
-### CSV upload fails
-- Check required columns: date, product, revenue, quantity, region
-- Verify minimum 5 rows
-- Check date format (YYYY-MM-DD)
-- Ensure numeric data has no currency symbols
-
----
-
-## 📚 Architecture
-
-```
-┌─────────────────────┐
-│ React Frontend      │
-│ (Vite + TailwindCSS)│
-└────────┬────────────┘
-         │ HTTP/REST
-         ▼
-┌─────────────────────────────┐
-│ Flask API Server            │
-│ - /api/healthz             │
-│ - /api/analyze (POST)       │
-└────────┬────────────────────┘
-         │
-         ▼
-┌─────────────────────────────┐
-│ Analysis Engine (Python)    │
-│ - CSV parsing               │
-│ - KPI calculation           │
-│ - Chart generation          │
-│ - Forecasting              │
-│ - Insights                 │
-└─────────────────────────────┘
+```bash
+cd artifacts/api-server-python
+cp .env.example .env
+# Edit .env and set GROQ_API_KEY=your-key-here
 ```
 
----
+## API Endpoints
 
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/healthz` | Health check |
+| POST | `/api/analyze` | Upload CSV, returns full analysis |
+| POST | `/api/chat` | AI Q&A about analysis results |
 
+## Tech Stack
 
+- **Frontend**: Vanilla HTML/CSS/JS, Chart.js, Tailwind (CDN), Font Awesome
+- **Backend**: Python 3.8+, Flask, Flask-CORS
+- **AI**: Groq API (Llama 3.3 70B) via OpenAI-compatible client
+- **Dev Server**: Vite (proxy + hot reload)
 
----
+## Environment Variables
 
-## 📞 Support
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3001` | Backend server port |
+| `APP_ENV` | `development` | `production` disables debug mode |
+| `LOG_LEVEL` | `INFO` | Logging verbosity |
+| `GROQ_API_KEY` | — | Required for AI chat feature |
 
-For issues or questions:
-1. Check the API logs: `console output`
-2. Verify CSV format
-3. Check browser console for frontend errors
-4. Ensure both backend and frontend are running
+## License
 
+MIT

@@ -1,3 +1,0 @@
-﻿Scope: all 3 workspace projects
-Progress: resolved 0, reused 1, downloaded 0, added 0
-ΓÇëERR_PNPM_CATALOG_ENTRY_NOT_FOUND_FOR_SPECΓÇë No catalog entry '@replit/vite-plugin-cartographer' was found for catalog 'default'.

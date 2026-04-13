@@ -89,7 +89,7 @@
     font-weight: 800; font-size: clamp(1.8rem, 4vw, 3rem);
     letter-spacing: 6px;
     background: linear-gradient(135deg, var(--cyan), var(--teal));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
     filter: drop-shadow(0 0 12px rgba(0,170,255,0.35));
     margin-top: 28px;
   }
@@ -173,7 +173,7 @@
     font-family: 'Orbitron', monospace; font-weight: 700;
     font-size: 0.85rem; letter-spacing: 3px;
     background: linear-gradient(135deg, var(--cyan), var(--teal));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
   }
   .status-pill {
     display: flex; align-items: center; gap: 8px;
@@ -571,6 +571,7 @@
 // ── State ────────────────────────────────────────────────────────────────────
 let analysisResult = null;
 let chartInstances = {};
+let loadingInterval = null;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtCurrency(n) {
@@ -581,6 +582,7 @@ function fmtCurrency(n) {
 
 // ── Screen navigation ─────────────────────────────────────────────────────────
 function goScreen(name) {
+  if (loadingInterval) { clearInterval(loadingInterval); loadingInterval = null; }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-dashboard').classList.remove('active');
   const target = document.getElementById('screen-' + name);
@@ -656,12 +658,14 @@ function runLoadingSteps() {
     'Generating insights & recommendations',
   ];
   let i = 0;
-  const iv = setInterval(() => {
+  if (loadingInterval) clearInterval(loadingInterval);
+  loadingInterval = setInterval(() => {
     i++;
     if (i < steps.length) {
       el.innerHTML = steps[i] + '<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>';
     } else {
-      clearInterval(iv);
+      clearInterval(loadingInterval);
+      loadingInterval = null;
     }
   }, 900);
 }

@@ -1,69 +1,61 @@
+"""Flask application factory for the Sales Analysis AI backend."""
+
 import os
 import sys
 from pathlib import Path
+
+# Ensure the project root (api-server-python/) is on sys.path so that
+# `from src.xxx` imports work when invoked as `python src/app.py`.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env')
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from src.logger import logger
 
-def create_app():
-    """Create and configure the Flask app"""
-    app = Flask(__name__)
-    
-    # Enable CORS
-    CORS(app)
-    
-    # Dirs for static assets
-    frontend_dir = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), "..", "..", "sales-ai"
-    ))
-    public_dir = os.path.join(frontend_dir, "public")
+# Load .env from the api-server-python root
+load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env')
 
+
+def create_app() -> Flask:
+    """Create and configure the Flask application."""
+    app = Flask(__name__)
+    CORS(app)
+
+    # Static asset directories
+    frontend_dir = str(Path(__file__).resolve().parent.parent.parent / "sales-ai")
+    public_dir = str(Path(frontend_dir) / "public")
+
+    # ── Static file routes ───────────────────────────────────────────────
     @app.route('/')
     def serve_index():
-        """Serve the main index.html"""
         return send_from_directory(frontend_dir, 'index.html')
 
-    @app.route('/logo.png')
-    def serve_logo():
-        """Serve logo"""
-        return send_from_directory(public_dir, 'logo.png')
-
-    @app.route('/sample.csv')
-    def serve_csv():
-        """Serve sample.csv file"""
+    @app.route('/<path:filename>')
+    def serve_static(filename: str):
+        """Serve static assets from public/, fall back to index.html for SPA."""
         try:
-            return send_from_directory(public_dir, 'sample.csv')
-        except Exception as e:
-            logger.error(f"Error serving sample.csv: {e}")
-            return {"error": "File not found"}, 404
-    
-    # Register routes
+            return send_from_directory(public_dir, filename)
+        except Exception:
+            return send_from_directory(frontend_dir, 'index.html')
+
+    # ── API blueprint ────────────────────────────────────────────────────
     from src.routes import api_bp
     app.register_blueprint(api_bp, url_prefix='/api')
-    
-    @app.errorhandler(404)
-    def not_found(error):
-        # Fall back to index.html for SPA routing
-        return send_from_directory(frontend_dir, 'index.html')
-    
+
+    # ── Error handlers ───────────────────────────────────────────────────
     @app.errorhandler(500)
     def internal_error(error):
         logger.error(f"Internal server error: {error}")
         return {"error": "Internal server error"}, 500
-    
+
     return app
 
 
 if __name__ == '__main__':
     app = create_app()
     port = int(os.getenv('PORT', 3001))
+    debug = os.getenv('APP_ENV', os.getenv('NODE_ENV', 'development')) != 'production'
     logger.info(f"Server listening on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=os.getenv('NODE_ENV') != 'production')
+    app.run(host='0.0.0.0', port=port, debug=debug)

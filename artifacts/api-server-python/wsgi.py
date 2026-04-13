@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Production WSGI entry point for the Flask application"""
+"""Production WSGI entry point for the Flask application."""
 import os
 from src.app import create_app
 

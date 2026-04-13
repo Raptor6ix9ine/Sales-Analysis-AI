@@ -1,12 +1,19 @@
-from typing import List, Dict, Tuple, Any, Optional
-from dataclasses import dataclass
+"""Sales data analysis engine.
+
+Parses CSV rows into typed dataclasses, computes KPIs, chart data,
+insights, recommendations, and a simple linear forecast.
+"""
+
+from typing import List, Dict, Tuple, Optional
+from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 from collections import defaultdict
 
 
+# ── Data Models ──────────────────────────────────────────────────────────────
+
 @dataclass
 class SalesRow:
-    """Represents a single sales data row"""
     date: datetime
     product: str
     revenue: float
@@ -16,7 +23,6 @@ class SalesRow:
 
 @dataclass
 class KPIs:
-    """Key Performance Indicators"""
     totalRevenue: float
     totalOrders: int
     growthRate: float
@@ -27,14 +33,12 @@ class KPIs:
 
 @dataclass
 class ChartData:
-    """Chart data structure"""
     labels: List[str]
     data: List[float]
 
 
 @dataclass
 class Charts:
-    """All chart data"""
     salesOverTime: ChartData
     revenueByProduct: ChartData
     revenueByRegion: ChartData
@@ -42,21 +46,18 @@ class Charts:
 
 @dataclass
 class Insight:
-    """A single insight"""
-    type: str  # "warn", "good", or "info"
+    type: str   # "warn" | "good" | "info"
     text: str
 
 
 @dataclass
 class Recommendation:
-    """A single recommendation"""
     icon: str
     text: str
 
 
 @dataclass
 class Forecast:
-    """Forecast data"""
     nextWeek: float
     nextMonth: float
     growthTrend: str
@@ -65,7 +66,6 @@ class Forecast:
 
 @dataclass
 class AnalysisResult:
-    """Complete analysis result"""
     kpis: KPIs
     charts: Charts
     insights: List[Insight]
@@ -73,551 +73,234 @@ class AnalysisResult:
     forecast: Forecast
     summary: str
 
-
-def validate_columns(headers: List[str]) -> List[str]:
-    """Validate that required columns are present in CSV headers (O(n))"""
-    required = {"date", "product", "revenue", "quantity", "region"}
-    normalized = {h.strip().lower() for h in headers}
-    return list(required - normalized)
+    def to_dict(self) -> dict:
+        """Recursively convert to a JSON-serialisable dict."""
+        return asdict(self)
 
 
-def _parse_number(value_str: str, is_int: bool = False) -> Optional[float]:
-    """Helper to parse numeric values safely"""
+# ── Parsing Helpers ──────────────────────────────────────────────────────────
+
+def _parse_number(value: str, *, integer: bool = False) -> Optional[float]:
+    """Strip non-numeric chars and convert. Returns None on failure."""
     try:
-        if is_int:
-            return float(int(''.join(c for c in value_str if c.isdigit())))
-        return float(''.join(c for c in value_str if c.isdigit() or c in '.-'))
+        cleaned = ''.join(c for c in value if c.isdigit() or c in '.-')
+        return float(int(cleaned)) if integer else float(cleaned)
     except (ValueError, IndexError):
         return None
 
 
+def validate_columns(headers: List[str]) -> List[str]:
+    """Return list of missing required columns (empty = valid)."""
+    required = {"date", "product", "revenue", "quantity", "region"}
+    present = {h.strip().lower() for h in headers}
+    return sorted(required - present)
+
+
 def parse_rows(raw_rows: List[Dict[str, str]]) -> Tuple[List[SalesRow], List[str]]:
-    """Parse and validate raw CSV rows (O(n))"""
+    """Parse raw CSV dicts into SalesRow objects. Returns (rows, warnings)."""
     rows: List[SalesRow] = []
     warnings: List[str] = []
-    
-    for i, raw_row in enumerate(raw_rows, 2):
-        # Normalize keys to lowercase (O(1) per row)
-        keys = {k.strip().lower(): v.strip() if v else "" for k, v in raw_row.items()}
-        
-        date_raw = keys.get("date", "")
-        product_raw = keys.get("product", "")
-        revenue_raw = keys.get("revenue", "")
-        quantity_raw = keys.get("quantity", "")
-        region_raw = keys.get("region", "")
-        
-        # Check for missing values
-        if not all([date_raw, product_raw, revenue_raw, quantity_raw, region_raw]):
+
+    for i, raw in enumerate(raw_rows, start=2):
+        # Normalise keys once
+        cols = {k.strip().lower(): (v.strip() if v else "") for k, v in raw.items()}
+
+        date_s = cols.get("date", "")
+        product = cols.get("product", "")
+        revenue_s = cols.get("revenue", "")
+        quantity_s = cols.get("quantity", "")
+        region = cols.get("region", "")
+
+        if not all((date_s, product, revenue_s, quantity_s, region)):
             warnings.append(f"Row {i}: missing values, skipped")
             continue
-        
-        # Parse date
+
+        # Date
         try:
-            date = datetime.fromisoformat(date_raw.split('T')[0])
+            date = datetime.fromisoformat(date_s.split("T")[0])
         except (ValueError, IndexError):
-            warnings.append(f"Row {i}: invalid date \"{date_raw}\", skipped")
+            warnings.append(f'Row {i}: invalid date "{date_s}", skipped')
             continue
-        
-        # Parse revenue and quantity
-        revenue = _parse_number(revenue_raw, is_int=False)
-        quantity = _parse_number(quantity_raw, is_int=True)
-        
+
+        # Numerics
+        revenue = _parse_number(revenue_s)
+        quantity = _parse_number(quantity_s, integer=True)
         if revenue is None or quantity is None:
             warnings.append(f"Row {i}: invalid numbers, skipped")
             continue
-        
+
         rows.append(SalesRow(
             date=date,
-            product=product_raw,
+            product=product,
             revenue=revenue,
-            quantity=int(quantity)
+            quantity=int(quantity),
+            region=region,
         ))
-    
+
     return rows, warnings
 
 
-def _group_by_key(items: List[SalesRow], key_fn) -> Dict[str, List[SalesRow]]:
-    """Group items by key function (O(n))"""
-    result: Dict[str, List[SalesRow]] = defaultdict(list)
-    for item in items:
-        result[key_fn(item)].append(item)
-    return dict(result)
+# ── Formatting ───────────────────────────────────────────────────────────────
 
-
-def _sum(values: List[float]) -> float:
-    """Sum with early exit for empty list"""
-    return sum(values) if values else 0.0
-
-
-def _avg(values: List[float]) -> float:
-    """Average with division safety"""
-    length = len(values)
-    return sum(values) / length if length > 0 else 0.0
-
-
-def _format_currency(n: float) -> str:
-    """Format number as currency (fixed)"""
+def _fmt_currency(n: float) -> str:
     if n >= 1_000_000:
         return f"${n / 1_000_000:.1f}M"
-    elif n >= 1_000:
+    if n >= 1_000:
         return f"${n / 1_000:.1f}K"
-    else:
-        return f"${n:.0f}"
+    return f"${n:.0f}"
 
+
+# ── Core Analysis ────────────────────────────────────────────────────────────
 
 def analyze(rows: List[SalesRow]) -> AnalysisResult:
-    """Perform comprehensive analysis on sales data (O(n log n) due to sorting)"""
+    """Run full analysis on parsed sales rows. O(n log n) due to sort."""
     if not rows:
         raise ValueError("No rows to analyze")
-    
-    # Sort by date once (O(n log n))
+
     rows.sort(key=lambda r: r.date)
-    
-    # ── Basic KPIs (O(n)) ───────────────────────────────────────────────────
-    total_revenue = _sum([r.revenue for r in rows])
-    total_orders = len(rows)
-    avg_order_value = total_revenue / total_orders if total_orders > 0 else 0.0
-    
-    # ── Sales over time weekly buckets (O(n)) ────────────────────────────────
+    n = len(rows)
+
+    # ── Single-pass aggregation ──────────────────────────────────────────
+    total_revenue = 0.0
     by_week: Dict[str, float] = {}
+    by_product: Dict[str, float] = defaultdict(float)
+    by_region: Dict[str, float] = defaultdict(float)
+    by_day: Dict[str, float] = defaultdict(float)
+
     for row in rows:
-        d = row.date
-        start_of_week = d - timedelta(days=d.weekday() + 1)
-        label = start_of_week.strftime("%b %d")
-        by_week[label] = by_week.get(label, 0) + row.revenue
-    
-    week_labels = list(by_week.keys())
+        total_revenue += row.revenue
+
+        # Weekly bucket (week starts Sunday)
+        week_start = row.date - timedelta(days=row.date.weekday() + 1)
+        week_label = week_start.strftime("%b %d")
+        by_week[week_label] = by_week.get(week_label, 0) + row.revenue
+
+        by_product[row.product] += row.revenue
+        by_region[row.region] += row.revenue
+        by_day[row.date.strftime("%Y-%m-%d")] += row.revenue
+
+    avg_order_value = total_revenue / n
+
+    # ── Growth rate (last 25 % vs previous 25 %) ────────────────────────
+    quarter = max(1, n // 4)
+    recent_rev = sum(r.revenue for r in rows[-quarter:])
+    prev_rev = sum(r.revenue for r in rows[-quarter * 2 : -quarter])
+    growth_rate = ((recent_rev - prev_rev) / prev_rev * 100) if prev_rev > 0 else 0.0
+
+    # ── Sorted breakdowns ────────────────────────────────────────────────
+    product_ranked = sorted(by_product.items(), key=lambda x: x[1], reverse=True)
+    region_ranked = sorted(by_region.items(), key=lambda x: x[1], reverse=True)
+
+    top_product, top_product_rev = product_ranked[0]
+    top_product_pct = (top_product_rev / total_revenue * 100) if total_revenue else 0.0
+    top_region = region_ranked[0][0]
+
+    worst_region_name, worst_region_rev = region_ranked[-1]
+    avg_region_rev = total_revenue / len(region_ranked) if region_ranked else 0.0
+    worst_region_gap = (
+        (avg_region_rev - worst_region_rev) / avg_region_rev * 100
+        if avg_region_rev > 0 else 0.0
+    )
+
+    # ── Anomaly detection ────────────────────────────────────────────────
+    day_values = list(by_day.values())
+    avg_day = sum(day_values) / len(day_values) if day_values else 0.0
+    anomaly_label: Optional[str] = None
+    for d, v in by_day.items():
+        if v > avg_day * 2.5:
+            dt = datetime.fromisoformat(d)
+            anomaly_label = f"Unusual spike on {dt.strftime('%b %d')} — {v / avg_day:.1f}x above average"
+            break
+
+    # ── Forecast (linear extrapolation on weekly data) ───────────────────
     week_data = list(by_week.values())
-    
-    # ── Growth rate: last 25% vs previous 25% (O(n)) ───────────────────────
-    quarter = max(1, len(rows) // 4)
-    recent_rows = rows[-quarter:]
-    prev_rows = rows[-quarter * 2:-quarter]
-    recent_revenue = _sum([r.revenue for r in recent_rows])
-    prev_revenue = _sum([r.revenue for r in prev_rows])
-    growth_rate = ((recent_revenue - prev_revenue) / prev_revenue * 100) if prev_revenue > 0 else 0.0
-    
-    # ── Revenue by product (O(n)) ──────────────────────────────────────────
-    by_product = _group_by_key(rows, lambda r: r.product)
-    product_revenues = sorted(
-        [{"name": name, "revenue": _sum([r.revenue for r in rs])} 
-         for name, rs in by_product.items()],
-        key=lambda x: x["revenue"],
-        reverse=True
-    )
-    
-    top_product = product_revenues[0]["name"] if product_revenues else "N/A"
-    top_product_pct = (product_revenues[0]["revenue"] / total_revenue * 100) if total_revenue > 0 and product_revenues else 0.0
-    
-    # ── Revenue by region (O(n)) ───────────────────────────────────────────
-    by_region = _group_by_key(rows, lambda r: r.region)
-    region_revenues = sorted(
-        [{"name": name, "revenue": _sum([r.revenue for r in rs])} 
-         for name, rs in by_region.items()],
-        key=lambda x: x["revenue"],
-        reverse=True
-    )
-    
-    top_region = region_revenues[0]["name"] if region_revenues else "N/A"
-    worst_region = region_revenues[-1] if region_revenues else None
-    avg_region_revenue = _avg([r["revenue"] for r in region_revenues])
-    worst_region_drop_pct = (
-        ((avg_region_revenue - worst_region["revenue"]) / avg_region_revenue * 100)
-        if avg_region_revenue > 0 and worst_region else 0.0
-    )
-    
-    # ── Anomaly detection (O(n)) ──────────────────────────────────────────
-    by_day: Dict[str, float] = {}
-    for row in rows:
-        label = row.date.strftime("%Y-%m-%d")
-        by_day[label] = by_day.get(label, 0) + row.revenue
-    
-    day_revenues = [{"d": d, "v": v} for d, v in by_day.items()]
-    avg_day = _avg([x["v"] for x in day_revenues])
-    anomaly_day = next((x for x in day_revenues if x["v"] > avg_day * 2.5), None)
-    
-    anomaly_label = None
-    if anomaly_day:
-        anomaly_date = datetime.fromisoformat(anomaly_day["d"])
-        anomaly_label = f"Unusual spike on {anomaly_date.strftime('%b %d')} — {anomaly_day['v'] / avg_day:.1f}x above average"
-    
-    # ── Forecast (O(1))─────────────────────────────────────────────────────
     wlen = len(week_data)
     slope = 0.0
     if wlen >= 2:
-        last4 = week_data[-min(4, wlen):]
-        slope = (last4[-1] - last4[0]) / (len(last4) - 1)
-    
-    last_week_revenue = week_data[-1] if wlen > 0 else avg_order_value * 10
-    next_week_forecast = max(0, last_week_revenue + slope)
-    next_month_forecast = max(0, next_week_forecast * 4 + slope * 10)
-    
-    growth_trend = "Upward trend" if slope > 0 else "Declining trend" if slope < 0 else "Stable"
-    
-    # ── Insights (O(1)) ────────────────────────────────────────────────────
+        tail = week_data[-min(4, wlen):]
+        slope = (tail[-1] - tail[0]) / (len(tail) - 1)
+
+    last_week = week_data[-1] if wlen else avg_order_value * 10
+    next_week = max(0.0, last_week + slope)
+    next_month = max(0.0, next_week * 4 + slope * 10)
+    trend = "Upward trend" if slope > 0 else "Declining trend" if slope < 0 else "Stable"
+
+    # ── Insights ─────────────────────────────────────────────────────────
     insights: List[Insight] = []
-    
+
     if growth_rate < -10:
-        insights.append(Insight(type="warn", text=f"Revenue dropped {abs(growth_rate):.1f}% recently — may signal seasonal dip or competitive pressure."))
+        insights.append(Insight("warn", f"Revenue dropped {abs(growth_rate):.1f}% recently — may signal seasonal dip or competitive pressure."))
     elif growth_rate > 10:
-        insights.append(Insight(type="good", text=f"Revenue grew {growth_rate:.1f}% in the latest period — strong positive momentum."))
+        insights.append(Insight("good", f"Revenue grew {growth_rate:.1f}% in the latest period — strong positive momentum."))
     else:
-        insights.append(Insight(type="info", text=f"Revenue is relatively stable with {abs(growth_rate):.1f}% change in the latest period."))
-    
-    insights.append(Insight(type="good", text=f"\"{top_product}\" is your top product, contributing {top_product_pct:.0f}% of total revenue."))
-    
-    if worst_region and worst_region_drop_pct > 15:
-        insights.append(Insight(type="warn", text=f"{worst_region['name']} region is underperforming by {worst_region_drop_pct:.0f}% below the regional average."))
-    
-    insights.append(Insight(type="good", text=f"Average order value is {_format_currency(avg_order_value)} across {total_orders:,} orders."))
-    
-    if anomaly_day:
-        insights.append(Insight(type="warn", text=f"Anomaly detected: {anomaly_label}"))
-    
-    if len(product_revenues) > 1:
-        bottom_product = product_revenues[-1]
-        bottom_pct = (bottom_product["revenue"] / total_revenue * 100) if total_revenue > 0 else 0.0
-        if bottom_pct < 10:
-            insights.append(Insight(type="warn", text=f"\"{bottom_product['name']}\" contributes only {bottom_pct:.1f}% of revenue — consider reviewing its positioning."))
-    
-    # ── Recommendations (O(1)) ──────────────────────────────────────────────
-    recs: List[Recommendation] = []
-    
-    recs.append(Recommendation(icon="bullseye", text=f"Increase marketing budget for \"{top_product}\" — it drives {top_product_pct:.0f}% of your revenue with the highest ROI."))
-    
-    if worst_region and worst_region_drop_pct > 15:
-        recs.append(Recommendation(icon="magnifying-glass", text=f"Investigate \"{worst_region['name']}\" region — assign a dedicated rep or run a targeted campaign to close the {worst_region_drop_pct:.0f}% performance gap."))
-    
+        insights.append(Insight("info", f"Revenue is relatively stable with {abs(growth_rate):.1f}% change in the latest period."))
+
+    insights.append(Insight("good", f'"{top_product}" is your top product, contributing {top_product_pct:.0f}% of total revenue.'))
+
+    if worst_region_gap > 15:
+        insights.append(Insight("warn", f"{worst_region_name} region is underperforming by {worst_region_gap:.0f}% below the regional average."))
+
+    insights.append(Insight("good", f"Average order value is {_fmt_currency(avg_order_value)} across {n:,} orders."))
+
+    if anomaly_label:
+        insights.append(Insight("warn", f"Anomaly detected: {anomaly_label}"))
+
+    if len(product_ranked) > 1:
+        bot_name, bot_rev = product_ranked[-1]
+        bot_pct = (bot_rev / total_revenue * 100) if total_revenue else 0.0
+        if bot_pct < 10:
+            insights.append(Insight("warn", f'"{bot_name}" contributes only {bot_pct:.1f}% of revenue — consider reviewing its positioning.'))
+
+    # ── Recommendations ──────────────────────────────────────────────────
+    recs: List[Recommendation] = [
+        Recommendation("bullseye", f'Increase marketing budget for "{top_product}" — it drives {top_product_pct:.0f}% of your revenue with the highest ROI.'),
+    ]
+
+    if worst_region_gap > 15:
+        recs.append(Recommendation("magnifying-glass", f'Investigate "{worst_region_name}" region — assign a dedicated rep or run a targeted campaign to close the {worst_region_gap:.0f}% performance gap.'))
+
     if growth_rate < -10:
-        recs.append(Recommendation(icon="chart-line", text="Revenue is declining — consider running promotions or discounts to re-engage customers and reverse the trend."))
+        recs.append(Recommendation("chart-line", "Revenue is declining — consider running promotions or discounts to re-engage customers and reverse the trend."))
     else:
-        recs.append(Recommendation(icon="boxes-stacked", text=f"Maintain inventory levels for \"{top_product}\" — demand trend suggests continued strong performance."))
-    
-    if len(product_revenues) > 1:
-        recs.append(Recommendation(icon="user-tie", text=f"Bundle \"{top_product}\" with lower-performing products to lift overall average order value."))
-    
-    # ── Summary sentence ────────────────────────────────────────────────────
-    summary = f"Analysis of {total_orders:,} orders totalling {_format_currency(total_revenue)}. {'Growing' if growth_rate >= 0 else 'Declining'} at {abs(growth_rate):.1f}% with \"{top_product}\" leading."
-    
-    # ── Build result ────────────────────────────────────────────────────────
+        recs.append(Recommendation("boxes-stacked", f'Maintain inventory levels for "{top_product}" — demand trend suggests continued strong performance.'))
+
+    if len(product_ranked) > 1:
+        recs.append(Recommendation("user-tie", f'Bundle "{top_product}" with lower-performing products to lift overall average order value.'))
+
+    # ── Summary ──────────────────────────────────────────────────────────
+    direction = "Growing" if growth_rate >= 0 else "Declining"
+    summary = f'Analysis of {n:,} orders totalling {_fmt_currency(total_revenue)}. {direction} at {abs(growth_rate):.1f}% with "{top_product}" leading.'
+
+    # ── Build result ─────────────────────────────────────────────────────
+    week_labels = list(by_week.keys())
+
     return AnalysisResult(
         kpis=KPIs(
             totalRevenue=total_revenue,
-            totalOrders=total_orders,
+            totalOrders=n,
             growthRate=growth_rate,
             avgOrderValue=avg_order_value,
             topProduct=top_product,
-            topRegion=top_region
+            topRegion=top_region,
         ),
         charts=Charts(
             salesOverTime=ChartData(labels=week_labels, data=week_data),
-            revenueByProduct=ChartData(labels=[p["name"] for p in product_revenues], data=[p["revenue"] for p in product_revenues]),
-            revenueByRegion=ChartData(labels=[r["name"] for r in region_revenues], data=[r["revenue"] for r in region_revenues])
+            revenueByProduct=ChartData(
+                labels=[p[0] for p in product_ranked],
+                data=[p[1] for p in product_ranked],
+            ),
+            revenueByRegion=ChartData(
+                labels=[r[0] for r in region_ranked],
+                data=[r[1] for r in region_ranked],
+            ),
         ),
         insights=insights,
         recommendations=recs,
         forecast=Forecast(
-            nextWeek=next_week_forecast,
-            nextMonth=next_month_forecast,
-            growthTrend=growth_trend,
-            anomaly=anomaly_label
+            nextWeek=next_week,
+            nextMonth=next_month,
+            growthTrend=trend,
+            anomaly=anomaly_label,
         ),
-        summary=summary
-    )
-
-
-def parse_rows(raw_rows: List[Dict[str, str]]) -> Tuple[List[SalesRow], List[str]]:
-    """
-    Parse and validate raw CSV rows.
-    Returns tuple of (parsed rows, warnings)
-    """
-    rows: List[SalesRow] = []
-    warnings: List[str] = []
-    
-    for i, raw_row in enumerate(raw_rows):
-        # Normalize keys to lowercase
-        keys = {k.strip().lower(): v.strip() if v else "" for k, v in raw_row.items()}
-        
-        date_raw = keys.get("date", "")
-        product_raw = keys.get("product", "")
-        revenue_raw = keys.get("revenue", "")
-        quantity_raw = keys.get("quantity", "")
-        region_raw = keys.get("region", "")
-        
-        # Check for missing values
-        if not all([date_raw, product_raw, revenue_raw, quantity_raw, region_raw]):
-            warnings.append(f"Row {i + 2}: missing values, skipped")
-            continue
-        
-        # Parse date
-        try:
-            date = datetime.fromisoformat(date_raw.split('T')[0])
-        except (ValueError, IndexError):
-            warnings.append(f"Row {i + 2}: invalid date \"{date_raw}\", skipped")
-            continue
-        
-        # Parse revenue (remove currency symbols and whitespace)
-        try:
-            revenue = float(''.join(c for c in revenue_raw if c.isdigit() or c in '.-'))
-        except ValueError:
-            warnings.append(f"Row {i + 2}: invalid revenue number, skipped")
-            continue
-        
-        # Parse quantity
-        try:
-            quantity = int(''.join(c for c in quantity_raw if c.isdigit()))
-        except ValueError:
-            warnings.append(f"Row {i + 2}: invalid quantity number, skipped")
-            continue
-        
-        rows.append(SalesRow(
-            date=date,
-            product=product_raw,
-            revenue=revenue,
-            quantity=quantity,
-            region=region_raw
-        ))
-    
-    return rows, warnings
-
-
-def _group_by(items: List[SalesRow], key_fn) -> Dict[str, List[SalesRow]]:
-    """Group items by a key function"""
-    result: Dict[str, List[SalesRow]] = defaultdict(list)
-    for item in items:
-        k = key_fn(item)
-        result[k].append(item)
-    return dict(result)
-
-
-def _sum(values: List[float]) -> float:
-    """Sum a list of floats"""
-    return sum(values) if values else 0
-
-
-def _avg(values: List[float]) -> float:
-    """Calculate average of a list of floats"""
-    return sum(values) / len(values) if values else 0
-
-
-def _format_currency(n: float) -> str:
-    """Format a number as currency"""
-    if n >= 1_000_000:
-        return f"${n / 1_000_000:.1f}M"
-    elif n >= 1_000:
-        return f"${n / 1_000:.1f}K"
-    else:
-        return f"${n:.0f}"
-
-
-def analyze(rows: List[SalesRow]) -> AnalysisResult:
-    """
-    Perform comprehensive analysis on sales data.
-    """
-    # Sort by date
-    rows.sort(key=lambda r: r.date)
-    
-    # ── Basic KPIs ──────────────────────────────────────────────────────────
-    total_revenue = _sum([r.revenue for r in rows])
-    total_orders = len(rows)
-    avg_order_value = total_revenue / total_orders if total_orders > 0 else 0
-    
-    # ── Sales over time (weekly buckets) ─────────────────────────────────────
-    by_week: Dict[str, float] = {}
-    for row in rows:
-        d = row.date
-        # Get start of week (Sunday)
-        start_of_week = d - timedelta(days=d.weekday() + 1)
-        label = start_of_week.strftime("%b %d")
-        by_week[label] = by_week.get(label, 0) + row.revenue
-    
-    week_labels = list(by_week.keys())
-    week_data = list(by_week.values())
-    
-    # ── Growth rate: last 25% vs previous 25% ────────────────────────────────
-    quarter = max(1, len(rows) // 4)
-    recent_rows = rows[-quarter:]
-    prev_rows = rows[-quarter * 2:-quarter]
-    recent_revenue = _sum([r.revenue for r in recent_rows])
-    prev_revenue = _sum([r.revenue for r in prev_rows])
-    growth_rate = ((recent_revenue - prev_revenue) / prev_revenue * 100) if prev_revenue > 0 else 0
-    
-    # ── Revenue by product ──────────────────────────────────────────────────
-    by_product = _group_by(rows, lambda r: r.product)
-    product_revenues = sorted(
-        [{"name": name, "revenue": _sum([r.revenue for r in rs])} 
-         for name, rs in by_product.items()],
-        key=lambda x: x["revenue"],
-        reverse=True
-    )
-    
-    top_product = product_revenues[0]["name"] if product_revenues else "N/A"
-    top_product_pct = (product_revenues[0]["revenue"] / total_revenue * 100) if total_revenue > 0 and product_revenues else 0
-    
-    # ── Revenue by region ───────────────────────────────────────────────────
-    by_region = _group_by(rows, lambda r: r.region)
-    region_revenues = sorted(
-        [{"name": name, "revenue": _sum([r.revenue for r in rs])} 
-         for name, rs in by_region.items()],
-        key=lambda x: x["revenue"],
-        reverse=True
-    )
-    
-    top_region = region_revenues[0]["name"] if region_revenues else "N/A"
-    worst_region = region_revenues[-1] if region_revenues else None
-    avg_region_revenue = _avg([r["revenue"] for r in region_revenues])
-    worst_region_drop_pct = (
-        ((avg_region_revenue - worst_region["revenue"]) / avg_region_revenue * 100)
-        if avg_region_revenue > 0 and worst_region else 0
-    )
-    
-    # ── Anomaly detection ───────────────────────────────────────────────────
-    by_day: Dict[str, float] = {}
-    for row in rows:
-        label = row.date.strftime("%Y-%m-%d")
-        by_day[label] = by_day.get(label, 0) + row.revenue
-    
-    day_revenues = [{"d": d, "v": v} for d, v in by_day.items()]
-    avg_day = _avg([x["v"] for x in day_revenues])
-    anomaly_day = next((x for x in day_revenues if x["v"] > avg_day * 2.5), None)
-    
-    anomaly_label = None
-    if anomaly_day:
-        anomaly_date = datetime.fromisoformat(anomaly_day["d"])
-        anomaly_label = f"Unusual spike on {anomaly_date.strftime('%b %d')} — {anomaly_day['v'] / avg_day:.1f}x above average"
-    
-    # ── Forecast (simple linear extrapolation on weekly data) ────────────────
-    wlen = len(week_data)
-    slope = 0
-    if wlen >= 2:
-        last4 = week_data[-min(4, wlen):]
-        slope = (last4[-1] - last4[0]) / (len(last4) - 1)
-    
-    last_week_revenue = week_data[-1] if wlen > 0 else avg_order_value * 10
-    next_week_forecast = max(0, last_week_revenue + slope)
-    next_month_forecast = max(0, next_week_forecast * 4 + slope * 10)
-    
-    if slope > 0:
-        growth_trend = "Upward trend"
-    elif slope < 0:
-        growth_trend = "Declining trend"
-    else:
-        growth_trend = "Stable"
-    
-    # ── Insights ────────────────────────────────────────────────────────────
-    insights: List[Insight] = []
-    
-    if growth_rate < -10:
-        insights.append(Insight(
-            type="warn",
-            text=f"Revenue dropped {abs(growth_rate):.1f}% recently — may signal seasonal dip or competitive pressure."
-        ))
-    elif growth_rate > 10:
-        insights.append(Insight(
-            type="good",
-            text=f"Revenue grew {growth_rate:.1f}% in the latest period — strong positive momentum."
-        ))
-    else:
-        insights.append(Insight(
-            type="info",
-            text=f"Revenue is relatively stable with {abs(growth_rate):.1f}% change in the latest period."
-        ))
-    
-    insights.append(Insight(
-        type="good",
-        text=f"\"{top_product}\" is your top product, contributing {top_product_pct:.0f}% of total revenue."
-    ))
-    
-    if worst_region and worst_region_drop_pct > 15:
-        insights.append(Insight(
-            type="warn",
-            text=f"{worst_region['name']} region is underperforming by {worst_region_drop_pct:.0f}% below the regional average."
-        ))
-    
-    insights.append(Insight(
-        type="good",
-        text=f"Average order value is {_format_currency(avg_order_value)} across {total_orders:,} orders."
-    ))
-    
-    if anomaly_day:
-        insights.append(Insight(
-            type="warn",
-            text=f"Anomaly detected: {anomaly_label}"
-        ))
-    
-    if len(product_revenues) > 1:
-        bottom_product = product_revenues[-1]
-        bottom_pct = (bottom_product["revenue"] / total_revenue * 100) if total_revenue > 0 else 0
-        if bottom_pct < 10:
-            insights.append(Insight(
-                type="warn",
-                text=f"\"{bottom_product['name']}\" contributes only {bottom_pct:.1f}% of revenue — consider reviewing its positioning."
-            ))
-    
-    # ── Recommendations ────────────────────────────────────────────────────
-    recs: List[Recommendation] = []
-    
-    recs.append(Recommendation(
-        icon="bullseye",
-        text=f"Increase marketing budget for \"{top_product}\" — it drives {top_product_pct:.0f}% of your revenue with the highest ROI."
-    ))
-    
-    if worst_region and worst_region_drop_pct > 15:
-        recs.append(Recommendation(
-            icon="magnifying-glass",
-            text=f"Investigate \"{worst_region['name']}\" region — assign a dedicated rep or run a targeted campaign to close the {worst_region_drop_pct:.0f}% performance gap."
-        ))
-    
-    if growth_rate < -10:
-        recs.append(Recommendation(
-            icon="chart-line",
-            text="Revenue is declining — consider running promotions or discounts to re-engage customers and reverse the trend."
-        ))
-    else:
-        recs.append(Recommendation(
-            icon="boxes-stacked",
-            text=f"Maintain inventory levels for \"{top_product}\" — demand trend suggests continued strong performance."
-        ))
-    
-    if len(product_revenues) > 1:
-        recs.append(Recommendation(
-            icon="user-tie",
-            text=f"Bundle \"{top_product}\" with lower-performing products to lift overall average order value."
-        ))
-    
-    # ── Summary sentence ────────────────────────────────────────────────────
-    summary = f"Analysis of {total_orders:,} orders totalling {_format_currency(total_revenue)}. {'Growing' if growth_rate >= 0 else 'Declining'} at {abs(growth_rate):.1f}% with \"{top_product}\" leading."
-    
-    # ── Build chart data ────────────────────────────────────────────────────
-    chart_data = Charts(
-        salesOverTime=ChartData(labels=week_labels, data=week_data),
-        revenueByProduct=ChartData(
-            labels=[p["name"] for p in product_revenues],
-            data=[p["revenue"] for p in product_revenues]
-        ),
-        revenueByRegion=ChartData(
-            labels=[r["name"] for r in region_revenues],
-            data=[r["revenue"] for r in region_revenues]
-        )
-    )
-    
-    return AnalysisResult(
-        kpis=KPIs(
-            totalRevenue=total_revenue,
-            totalOrders=total_orders,
-            growthRate=growth_rate,
-            avgOrderValue=avg_order_value,
-            topProduct=top_product,
-            topRegion=top_region
-        ),
-        charts=chart_data,
-        insights=insights,
-        recommendations=recs,
-        forecast=Forecast(
-            nextWeek=next_week_forecast,
-            nextMonth=next_month_forecast,
-            growthTrend=growth_trend,
-            anomaly=anomaly_label
-        ),
-        summary=summary
+        summary=summary,
     )
