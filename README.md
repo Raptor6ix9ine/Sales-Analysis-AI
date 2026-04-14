@@ -2,7 +2,7 @@
 
 > Turn your sales data into clear business decisions in seconds.
 
-A cyberpunk-themed sales analytics dashboard that accepts CSV uploads, performs comprehensive analysis (KPIs, charts, insights, recommendations, forecasting), and includes an AI-powered Q&A chat.
+A sales analytics dashboard that accepts CSV uploads, performs comprehensive analysis (KPIs, charts, insights, recommendations, forecasting), and includes an AI-powered Q&A chat.
 
 ## Architecture
 

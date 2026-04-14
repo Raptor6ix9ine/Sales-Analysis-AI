@@ -21,6 +21,7 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env')
 def create_app() -> Flask:
     """Create and configure the Flask application."""
     app = Flask(__name__)
+    app.config['ENV'] = os.getenv('FLASK_ENV', 'production')
     CORS(app)
 
     # Static asset directories
